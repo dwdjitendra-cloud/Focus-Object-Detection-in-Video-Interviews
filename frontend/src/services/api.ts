@@ -14,8 +14,15 @@ class ApiService {
   private api: AxiosInstance;
 
   constructor() {
+    // ✅ Pick correct API base URL depending on environment
+    const baseURL =
+      import.meta.env.VITE_API_URL?.trim() ||
+      (import.meta.env.MODE === 'development'
+        ? 'http://localhost:5000/api'
+        : 'https://focus-object-detection-in-video-cmky.onrender.com/api'); // fallback prod backend
+
     this.api = axios.create({
-      baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+      baseURL,
       timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '10000'),
       headers: { 'Content-Type': 'application/json' },
     });
