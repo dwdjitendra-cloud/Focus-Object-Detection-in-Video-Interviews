@@ -14,7 +14,7 @@ class ApiService {
   private api: AxiosInstance;
 
   constructor() {
-    // ✅ Pick correct API base URL depending on environment
+    // Pick correct API base URL depending on environment
     const baseURL =
       import.meta.env.VITE_API_URL?.trim() ||
       (import.meta.env.MODE === 'development'
@@ -222,7 +222,15 @@ class ApiService {
 
   // --- Health check ---
   async healthCheck() {
-    return this.request<{ status: string; timestamp: string; uptime: number }>({ method: 'GET', url: '/health' });
+    // ✅ FIX: This endpoint is not under /api, so we call it with a modified URL.
+    try {
+      const healthUrl = this.api.defaults.baseURL!.replace('/api', '/health');
+      const response = await axios.get<ApiResponse<{ status: string; timestamp: string; uptime: number }>>(healthUrl);
+      return response.data.data!;
+    } catch (error: any) {
+      console.error('API Error (Health Check):', error.response?.data || error.message);
+      throw error;
+    }
   }
 }
 
