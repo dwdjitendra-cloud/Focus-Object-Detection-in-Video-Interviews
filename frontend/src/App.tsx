@@ -76,7 +76,7 @@ function App() {
           ...eventData,
           sessionId: currentSession._id!,
         });
-        // ✅ FIX 1: Add new events to the beginning of the array
+      
         setEvents(prev => [event, ...prev]);
       } catch (err) {
         console.error('Failed to log event:', err);

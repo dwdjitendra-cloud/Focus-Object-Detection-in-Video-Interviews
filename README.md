@@ -215,7 +215,7 @@ npm run build
 vercel --prod
 ```
 
-### Backend (Railway/Render)
+### Backend (Render)
 ```bash
 cd backend
 # Configure environment variables
@@ -282,15 +282,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Detection Accuracy Issues** - Verify lighting conditions
 
 ### Getting Help
-- 📧 Email: support@videoproctoring.com
-- 💬 Discord: [Join our community](https://discord.gg/videoproctoring)
-- 📖 Documentation: [Full docs](https://docs.videoproctoring.com)
+- 📧 Email: jitendrakumar637587@gmail.com
 
 ## 🎯 Roadmap
 
 ### Version 2.0
-- [x] Advanced eye tracking with drowsiness detection
-- [x] Audio analysis for background voices
 - [ ] Mobile app support
 - [ ] Advanced analytics dashboard
 - [ ] Multi-language support
