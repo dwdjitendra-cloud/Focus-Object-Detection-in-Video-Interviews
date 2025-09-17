@@ -19,7 +19,7 @@ class ApiService {
       import.meta.env.VITE_API_URL?.trim() ||
       (import.meta.env.MODE === 'development'
         ? 'http://localhost:5000/api'
-        : 'https://focus-object-detection-in-video-cmky.onrender.com/api'); // fallback prod backend
+        : 'https://focus-object-detection-in-video-cmky.onrender.com/api'); 
 
     this.api = axios.create({
       baseURL,
@@ -222,7 +222,6 @@ class ApiService {
 
   // --- Health check ---
   async healthCheck() {
-    // ✅ FIX: This endpoint is not under /api, so we call it with a modified URL.
     try {
       const healthUrl = this.api.defaults.baseURL!.replace('/api', '/health');
       const response = await axios.get<ApiResponse<{ status: string; timestamp: string; uptime: number }>>(healthUrl);

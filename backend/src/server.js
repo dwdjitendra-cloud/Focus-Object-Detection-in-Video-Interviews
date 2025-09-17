@@ -35,12 +35,12 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// CORS configuration with the fix
+// CORS configuration
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
   "http://localhost:5174",
-  "https://focus-object-detection-in-video-interviews-da0jjgxw1.vercel.app" // ✅ The URL for your Vercel frontend is now included
+  "https://focus-object-detection-in-video-int-gray.vercel.app" // Vercel frontend
 ];
 
 app.use(cors({
