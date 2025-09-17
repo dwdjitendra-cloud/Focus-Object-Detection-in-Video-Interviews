@@ -9,10 +9,7 @@ require("dotenv").config();
 const connectDB = require("./config/database");
 const errorHandler = require("./middleware/errorHandler");
 
-// Route imports
-const candidateRoutes = require("./routes/candidates");
-const sessionRoutes = require("./routes/sessions");
-const eventRoutes = require("./routes/events");
+
 
 const app = express();
 
