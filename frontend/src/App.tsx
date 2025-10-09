@@ -293,7 +293,7 @@ function App() {
                 // ✅ FIX 2: Display the first 5 events (which are the newest)
                 events.slice(0, 5).map((event, index) => (
                   <div
-                    key={event._id || index}
+                    key={`${event._id || 'event'}-${event.timestamp}-${event.type}-${index}`}
                     className={`p-3 rounded-lg border-l-4 ${
                       event.severity === 'high' ? 'border-red-500 bg-red-50' :
                       event.severity === 'medium' ? 'border-yellow-500 bg-yellow-50' :

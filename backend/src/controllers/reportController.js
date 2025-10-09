@@ -25,6 +25,7 @@ exports.generateReport = async (req, res) => {
       .sort({ timestamp: 1 });
 
     // Calculate statistics
+    // Include 'drowsiness' in focus events for consistent integrity score calculation
     const focusEvents = events.filter(e => 
       ['focus_lost', 'no_face', 'drowsiness'].includes(e.type)
     );
@@ -171,7 +172,8 @@ exports.generatePDFReport = async (req, res) => {
        .text(`Interview Date: ${new Date(session.startTime).toLocaleDateString()}`, 50, 190);
 
     // Session Summary
-    const focusEvents = events.filter(e => ['focus_lost', 'no_face'].includes(e.type));
+    // Include 'drowsiness' in focus events for consistent integrity score calculation
+    const focusEvents = events.filter(e => ['focus_lost', 'no_face', 'drowsiness'].includes(e.type));
     const objectEvents = events.filter(e => ['phone', 'book', 'notes', 'device'].includes(e.type));
     const integrityScore = session.integrityScore || 
       Math.max(0, 100 - focusEvents.length * 5 - objectEvents.length * 10);
@@ -194,8 +196,18 @@ exports.generatePDFReport = async (req, res) => {
           yPosition = 50;
         }
         
+        // Validate timestamp before parsing to prevent errors
+        let timeString = 'Invalid time';
+        try {
+          if (event.timestamp) {
+            timeString = new Date(event.timestamp).toLocaleTimeString();
+          }
+        } catch (error) {
+          console.error('Error parsing event timestamp:', error);
+        }
+        
         doc.fontSize(10)
-           .text(`${index + 1}. ${new Date(event.timestamp).toLocaleTimeString()} - ${event.type} (${event.severity})`, 50, yPosition)
+           .text(`${index + 1}. ${timeString} - ${event.type} (${event.severity})`, 50, yPosition)
            .text(`   ${event.description}`, 50, yPosition + 12);
         yPosition += 30;
       });
@@ -380,7 +392,8 @@ function generateRecommendations(integrityScore, events) {
   }
 
   // Specific recommendations based on event types
-  const focusEvents = events.filter(e => ['focus_lost', 'no_face'].includes(e.type));
+  // Include 'drowsiness' in focus events for consistent integrity score calculation
+  const focusEvents = events.filter(e => ['focus_lost', 'no_face', 'drowsiness'].includes(e.type));
   const objectEvents = events.filter(e => ['phone', 'book', 'notes', 'device'].includes(e.type));
   const multiplePersonEvents = events.filter(e => e.type === 'multiple_faces');
 
