@@ -184,14 +184,33 @@ class ApiService {
     window.URL.revokeObjectURL(url);
   }
 
+  private getUsernameSlug(defaultBase: string) {
+    try {
+      const raw = localStorage.getItem('user');
+      if (!raw) return defaultBase;
+      const user = JSON.parse(raw) as { name?: string; email?: string };
+      const base = (user.name || user.email || defaultBase).toString().toLowerCase();
+      return base
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^a-z0-9_]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '');
+    } catch {
+      return defaultBase;
+    }
+  }
+
   async downloadPDFReport(sessionId: string) {
     const response = await this.api.get(`/reports/${sessionId}/pdf`, { responseType: 'blob' });
-    this.downloadBlob(response.data, `report_${sessionId}.pdf`);
+    const base = this.getUsernameSlug('proctor_report');
+    this.downloadBlob(response.data, `${base}.pdf`);
   }
 
   async downloadCSVReport(sessionId: string) {
     const response = await this.api.get(`/reports/${sessionId}/csv`, { responseType: 'blob' });
-    this.downloadBlob(response.data, `report_${sessionId}.csv`);
+    const base = this.getUsernameSlug('proctor_report');
+    this.downloadBlob(response.data, `${base}.csv`);
   }
 
   async getReportStats() {

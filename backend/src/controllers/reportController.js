@@ -231,6 +231,27 @@ exports.generateCSVReport = async (req, res) => {
     const events = await DetectionEvent.find({ sessionId: req.params.sessionId })
       .sort({ timestamp: 1 });
 
+    // Compute summary similar to JSON/PDF
+    const focusEvents = events.filter(e => ['focus_lost', 'no_face', 'drowsiness'].includes(e.type));
+    const objectEvents = events.filter(e => ['phone', 'book', 'notes', 'device'].includes(e.type));
+    const multiplePersonEvents = events.filter(e => e.type === 'multiple_faces');
+    const behaviorEvents = events.filter(e => ['suspicious_behavior', 'background_voice'].includes(e.type));
+
+    let integrityScore = session.integrityScore;
+    if (integrityScore === undefined || integrityScore === null) {
+      integrityScore = 100;
+      integrityScore -= focusEvents.length * 5;
+      integrityScore -= objectEvents.length * 10;
+      integrityScore -= multiplePersonEvents.length * 15;
+      integrityScore -= behaviorEvents.length * 8;
+      integrityScore = Math.max(0, integrityScore);
+    }
+
+    const actualDuration = session.actualDuration ||
+      (session.endTime && session.startTime ?
+        Math.round((new Date(session.endTime) - new Date(session.startTime)) / (1000 * 60)) :
+        0);
+
     // Prepare CSV data
     const csvData = events.map(event => ({
       timestamp: new Date(event.timestamp).toISOString(),
@@ -241,7 +262,18 @@ exports.generateCSVReport = async (req, res) => {
       confidence: event.confidence ? Math.round(event.confidence * 100) : '',
       candidateName: session.candidateId.name,
       candidateEmail: session.candidateId.email,
-      position: session.candidateId.position
+      position: session.candidateId.position,
+      sessionId: session._id.toString(),
+      sessionStatus: session.status,
+      sessionStartTime: new Date(session.startTime).toISOString(),
+      sessionEndTime: session.endTime ? new Date(session.endTime).toISOString() : '',
+      actualDuration: actualDuration,
+      totalEvents: events.length,
+      focusViolations: focusEvents.length,
+      objectViolations: objectEvents.length,
+      multiplePersonViolations: multiplePersonEvents.length,
+      behaviorViolations: behaviorEvents.length,
+      integrityScore: Math.round(integrityScore)
     }));
 
     // Create temporary file
@@ -265,7 +297,18 @@ exports.generateCSVReport = async (req, res) => {
         { id: 'confidence', title: 'Confidence (%)' },
         { id: 'candidateName', title: 'Candidate Name' },
         { id: 'candidateEmail', title: 'Candidate Email' },
-        { id: 'position', title: 'Position' }
+        { id: 'position', title: 'Position' },
+        { id: 'sessionId', title: 'Session ID' },
+        { id: 'sessionStatus', title: 'Session Status' },
+        { id: 'sessionStartTime', title: 'Session Start Time' },
+        { id: 'sessionEndTime', title: 'Session End Time' },
+        { id: 'actualDuration', title: 'Actual Duration (min)' },
+        { id: 'totalEvents', title: 'Total Events' },
+        { id: 'focusViolations', title: 'Focus Violations' },
+        { id: 'objectViolations', title: 'Object Violations' },
+        { id: 'multiplePersonViolations', title: 'Multiple Person Violations' },
+        { id: 'behaviorViolations', title: 'Behavior Violations' },
+        { id: 'integrityScore', title: 'Integrity Score' }
       ]
     });
 

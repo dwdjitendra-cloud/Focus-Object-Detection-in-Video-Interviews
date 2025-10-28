@@ -238,7 +238,19 @@ export const CandidateSetup: React.FC<CandidateSetupProps> = ({ onStart, isLoadi
             </li>
             <li className="flex items-start">
               <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-              Unauthorized object detection (phones, books, notes)
+              Head pose and focus tracking (yaw, pitch, roll)
+            </li>
+            <li className="flex items-start">
+              <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+              Drowsiness detection via eye aspect ratio (EAR)
+            </li>
+            <li className="flex items-start">
+              <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+              Voice/background audio detection for conversation cues
+            </li>
+            <li className="flex items-start">
+              <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+              Unauthorized object detection (phones, books, notes, devices)
             </li>
             <li className="flex items-start">
               <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
@@ -246,7 +258,11 @@ export const CandidateSetup: React.FC<CandidateSetupProps> = ({ onStart, isLoadi
             </li>
             <li className="flex items-start">
               <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
-              Comprehensive reporting with integrity scoring
+              Comprehensive reporting with session analytics and integrity score
+            </li>
+            <li className="flex items-start">
+              <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+              One-click PDF and CSV export of detailed reports
             </li>
           </ul>
         </div>

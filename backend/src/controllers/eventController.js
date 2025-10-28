@@ -107,6 +107,8 @@ exports.createEvent = async (req, res) => {
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      // Log validation failure for debugging
+      console.warn('Validation error creating event:', { body: req.body, errors: errors.array().slice(0, 10) });
       return res.status(400).json({
         success: false,
         message: 'Validation Error',

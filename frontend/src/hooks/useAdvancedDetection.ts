@@ -325,11 +325,9 @@
 
 
 import { useRef, useEffect, useState, useCallback } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as blazeface from '@tensorflow-models/blazeface';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
-import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
 import { DetectionState, DetectionEvent, DetectionConfig } from '../types';
+import { getModels } from '../services/modelLoader';
+import type { FaceModel, ObjectModel, LandmarkModel } from '../services/modelLoader';
 
 // Default config
 const DEFAULT_CONFIG: DetectionConfig = {
@@ -377,9 +375,9 @@ const useAdvancedDetection = (
   });
 
   const [models, setModels] = useState<{
-    faceModel?: blazeface.BlazeFaceModel;
-    objectModel?: cocoSsd.ObjectDetection;
-    landmarkModel?: faceLandmarksDetection.FaceLandmarksDetector;
+    faceModel?: FaceModel;
+    objectModel?: ObjectModel;
+    landmarkModel?: LandmarkModel;
   }>({});
 
   const intervalRef = useRef<number | undefined>();
@@ -468,29 +466,14 @@ const useAdvancedDetection = (
     }
   }, [initializeAudio]);
 
-  // Load AI models & initialize audio
+  // Load AI models (via shared loader) & initialize audio
   useEffect(() => {
     let cancelled = false;
 
     const loadModels = async () => {
       try {
-        console.log('Loading AI models...');
-        await tf.ready();
-        // prefer webgl for performance if available
-        try {
-          await tf.setBackend('webgl');
-        } catch (e) {
-          console.warn('Failed to set tf backend to webgl, using default:', e);
-        }
-
-        const [faceModel, objectModel, landmarkModel] = await Promise.all([
-          blazeface.load(),
-          cocoSsd.load(),
-          faceLandmarksDetection.createDetector(
-            faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-            { runtime: 'tfjs', refineLandmarks: true, maxFaces: 2 }
-          ),
-        ]);
+        console.log('Loading AI models (shared cache)...');
+        const { faceModel, objectModel, landmarkModel } = await getModels();
 
         if (cancelled) return;
 
@@ -619,7 +602,18 @@ const useAdvancedDetection = (
 
         const objects = await models.objectModel!.detect(video);
         const filtered = objects.filter(o => o.score > finalConfig.CONFIDENCE_THRESHOLD);
-        const detectedObjects = filtered.map(o => o.class);
+        // Map COCO classes to our allowed event types
+        const mapped: string[] = [];
+        filtered.forEach(o => {
+          const cls = (o.class || '').toLowerCase();
+          if (cls.includes('phone') || cls.includes('cell phone') || cls.includes('mobile')) mapped.push('phone');
+          else if (cls.includes('book')) mapped.push('book');
+          else if (cls.includes('laptop') || cls.includes('keyboard') || cls.includes('mouse')) mapped.push('device');
+          else if (cls.includes('paper') || cls.includes('notebook') || cls.includes('note')) mapped.push('notes');
+          else if (cls.includes('person') && o.score > 0.6) mapped.push('unauthorized_person');
+          // else ignore other classes
+        });
+        const detectedObjects = Array.from(new Set(mapped));
         const confidence = filtered.length > 0 ? Math.max(...filtered.map(o => o.score)) : 0;
 
         // Functional state update to avoid stale closures
@@ -691,7 +685,7 @@ const useAdvancedDetection = (
           const newObjects = detectedObjects.filter(o => !prev.detectedObjects.includes(o));
           newObjects.forEach(obj => {
             queueEvent({
-              type: obj,
+              type: obj as any,
               timestamp: new Date(),
               description: `Detected object: ${obj}`,
               severity: 'high',

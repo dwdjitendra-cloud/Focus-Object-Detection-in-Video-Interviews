@@ -78,8 +78,29 @@ function App() {
         });
       
         setEvents(prev => [event, ...prev]);
-      } catch (err) {
+      } catch (rawErr) {
+        const err: any = rawErr;
         console.error('Failed to log event:', err);
+        const status = err && err.response && err.response.status;
+        // If validation/client error (4xx), show minimal log and don't retry
+        if (status && status >= 400 && status < 500) {
+          console.warn('Event rejected by server (client error):', (err.response && err.response.data) || err.message || err);
+          return;
+        }
+
+        // For network/server errors (no response or 5xx), attempt to persist to localStorage queue if present
+        try {
+          // Fallback: persist to a simple localStorage queue so events can be inspected/retried later
+          const KEY = 'eventQueue_v1';
+          const existingRaw = localStorage.getItem(KEY);
+          const q = existingRaw ? JSON.parse(existingRaw) : [];
+          const item = { id: `${Date.now()}-${Math.random().toString(36).slice(2,9)}`, payload: { ...eventData, sessionId: currentSession._id! }, attempts: 0, createdAt: new Date().toISOString() };
+          q.push(item);
+          localStorage.setItem(KEY, JSON.stringify(q));
+          console.info('Event persisted to localStorage queue for retry');
+        } catch (qErr) {
+          console.warn('Failed to persist event to localStorage; event will be dropped', qErr);
+        }
       }
     },
     [currentSession, currentCandidate]
@@ -114,6 +135,16 @@ function App() {
     } catch (err: any) {
       console.error('Failed to generate report:', err);
       setError(err.response?.data?.message || 'Failed to generate report');
+    }
+  };
+
+  const handleDownloadCSV = async () => {
+    if (!currentSession) return;
+    try {
+      await apiService.downloadCSVReport(currentSession._id!);
+    } catch (err: any) {
+      console.error('Failed to download CSV report:', err);
+      setError(err.response?.data?.message || 'Failed to download CSV report');
     }
   };
 
@@ -206,6 +237,13 @@ function App() {
               <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`}></div>
               <span className="text-gray-600">{isRecording ? 'Recording' : 'Not Recording'}</span>
             </div>
+            <button
+              onClick={handleDownloadCSV}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4" /> Export CSV
+            </button>
             <button
               onClick={handleViewReport}
               disabled={isLoading}
