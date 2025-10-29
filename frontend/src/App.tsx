@@ -70,6 +70,11 @@ function App() {
   const handleDetectionEvent = useCallback(
     async (eventData: Omit<DetectionEvent, '_id' | 'candidateId' | 'sessionId'>) => {
       if (!currentSession || !currentCandidate) return;
+      // Avoid posting events unless session is active
+      if (currentSession.status !== 'active') {
+        // Silently drop to avoid server 400s (inactive session)
+        return;
+      }
 
       try {
         const event = await apiService.createEvent({

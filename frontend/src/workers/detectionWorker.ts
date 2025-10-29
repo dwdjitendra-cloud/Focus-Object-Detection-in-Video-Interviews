@@ -101,7 +101,8 @@ self.addEventListener('message', async (evt: MessageEvent<WorkerInit | WorkerFra
       // Prepare canvas once
       if (!canvas) {
         canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-        ctx = canvas.getContext('2d');
+        // Use willReadFrequently for faster getImageData readbacks
+        ctx = canvas.getContext('2d', { willReadFrequently: true } as any);
       }
       if (canvas!.width !== bitmap.width || canvas!.height !== bitmap.height) {
         canvas!.width = bitmap.width; canvas!.height = bitmap.height;
