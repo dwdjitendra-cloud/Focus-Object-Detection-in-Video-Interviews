@@ -170,32 +170,46 @@ exports.generatePDFReport = async (req, res) => {
        .text(`Position: ${session.candidateId.position}`, 50, 175)
        .text(`Interview Date: ${new Date(session.startTime).toLocaleDateString()}`, 50, 190);
 
-    // Session Summary
-    const focusEvents = events.filter(e => ['focus_lost', 'no_face'].includes(e.type));
+    // Session Summary (align with JSON report logic)
+    const focusEvents = events.filter(e => ['focus_lost', 'no_face', 'drowsiness'].includes(e.type));
     const objectEvents = events.filter(e => ['phone', 'book', 'notes', 'device'].includes(e.type));
-    const integrityScore = session.integrityScore || 
-      Math.max(0, 100 - focusEvents.length * 5 - objectEvents.length * 10);
+    const multiplePersonEvents = events.filter(e => e.type === 'multiple_faces');
+    const behaviorEvents = events.filter(e => ['suspicious_behavior', 'background_voice'].includes(e.type));
 
-    doc.fontSize(16).text('Session Summary', 50, 230);
+    let integrityScore = session.integrityScore;
+    if (integrityScore === undefined || integrityScore === null) {
+      integrityScore = 100;
+      integrityScore -= focusEvents.length * 5;
+      integrityScore -= objectEvents.length * 10;
+      integrityScore -= multiplePersonEvents.length * 15;
+      integrityScore -= behaviorEvents.length * 8;
+      integrityScore = Math.max(0, integrityScore);
+    }
+
+   doc.fontSize(16).text('Session Summary', 50, 230);
     doc.fontSize(12)
        .text(`Total Events: ${events.length}`, 50, 255)
        .text(`Focus Violations: ${focusEvents.length}`, 50, 270)
-       .text(`Object Violations: ${objectEvents.length}`, 50, 285)
-       .text(`Integrity Score: ${Math.round(integrityScore)}/100`, 50, 300);
+     .text(`Object Violations: ${objectEvents.length}`, 50, 285)
+     .text(`Multiple Person Violations: ${multiplePersonEvents.length}`, 50, 300)
+     .text(`Behavior Violations: ${behaviorEvents.length}`, 50, 315)
+     .text(`Integrity Score: ${Math.round(integrityScore)}/100`, 50, 330);
 
     // Event Timeline
     if (events.length > 0) {
-      doc.fontSize(16).text('Event Timeline', 50, 340);
-      let yPosition = 365;
+      doc.fontSize(16).text('Event Timeline', 50, 360);
+      let yPosition = 385;
       
-      events.slice(0, 15).forEach((event, index) => {
-        if (yPosition > 700) {
+      events.forEach((event, index) => {
+        if (yPosition > 740) {
           doc.addPage();
           yPosition = 50;
+          doc.fontSize(16).text('Event Timeline (contd.)', 50, yPosition);
+          yPosition += 25;
         }
-        
+        const time = new Date(event.timestamp).toLocaleTimeString();
         doc.fontSize(10)
-           .text(`${index + 1}. ${new Date(event.timestamp).toLocaleTimeString()} - ${event.type} (${event.severity})`, 50, yPosition)
+           .text(`${index + 1}. ${time} - ${event.type} (${event.severity})`, 50, yPosition)
            .text(`   ${event.description}`, 50, yPosition + 12);
         yPosition += 30;
       });

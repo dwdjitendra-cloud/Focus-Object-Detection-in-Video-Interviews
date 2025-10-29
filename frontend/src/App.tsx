@@ -5,7 +5,7 @@ import { Candidate, DetectionEvent, InterviewSession } from './types';
 import { apiService } from './services/api';
 import { 
   FileText, Play, Square, BarChart3, AlertTriangle, 
-  CheckCircle, Clock, Eye 
+  CheckCircle, Clock, Eye, Users, Mic2
 } from 'lucide-react';
 
 type AppState = 'setup' | 'monitoring' | 'report';
@@ -19,6 +19,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionDuration, setSessionDuration] = useState(0);
+  const [showAllEvents, setShowAllEvents] = useState(false);
 
   // Session timer
   useEffect(() => {
@@ -176,13 +177,17 @@ function App() {
 
   // Session stats
   const getSessionStats = () => {
-    const focusEvents = events.filter(e => ['focus_lost', 'no_face'].includes(e.type));
+    const focusEvents = events.filter(e => ['focus_lost', 'no_face', 'drowsiness'].includes(e.type));
     const objectEvents = events.filter(e => ['phone', 'book', 'notes', 'device'].includes(e.type));
+    const multiplePersonEvents = events.filter(e => e.type === 'multiple_faces');
+    const behaviorEvents = events.filter(e => ['suspicious_behavior', 'background_voice'].includes(e.type));
     const highSeverityEvents = events.filter(e => e.severity === 'high');
     return {
       total: events.length,
       focus: focusEvents.length,
       objects: objectEvents.length,
+      multiple: multiplePersonEvents.length,
+      behavior: behaviorEvents.length,
       highSeverity: highSeverityEvents.length,
     };
   };
@@ -316,6 +321,22 @@ function App() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm text-gray-600">Multiple Persons</span>
+                </div>
+                <span className="font-semibold text-blue-600">{stats.multiple}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mic2 className="w-4 h-4 text-rose-500" />
+                  <span className="text-sm text-gray-600">Behavior/Audio Flags</span>
+                </div>
+                <span className="font-semibold text-rose-600">{stats.behavior}</span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-purple-500" />
                   <span className="text-sm text-gray-600">High Severity</span>
                 </div>
@@ -325,7 +346,15 @@ function App() {
           </div>
 
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Events</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">{showAllEvents ? 'All Events' : 'Recent Events'}</h3>
+              <button
+                onClick={() => setShowAllEvents(prev => !prev)}
+                className="text-sm text-blue-600 hover:text-blue-700"
+              >
+                {showAllEvents ? 'Show Latest 5' : 'View All'}
+              </button>
+            </div>
             <div className="space-y-3 max-h-64 overflow-y-auto">
               {events.length === 0 ? (
                 <div className="text-center py-8">
@@ -333,8 +362,7 @@ function App() {
                   <p className="text-gray-500 text-sm">No violations detected</p>
                 </div>
               ) : (
-                // ✅ FIX 2: Display the first 5 events (which are the newest)
-                events.slice(0, 5).map((event, index) => (
+                (showAllEvents ? events : events.slice(0, 5)).map((event, index) => (
                   <div
                     key={event._id || index}
                     className={`p-3 rounded-lg border-l-4 ${
