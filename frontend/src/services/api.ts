@@ -15,15 +15,20 @@ class ApiService {
 
   constructor() {
     // Pick correct API base URL depending on environment
-    const baseURL =
-      import.meta.env.VITE_API_URL?.trim() ||
-      (import.meta.env.MODE === 'development'
-        ? 'http://localhost:5000/api'
-        : 'https://focus-object-detection-in-video-cmky.onrender.com/api'); 
+  const rawBase = (import.meta as any).env?.VITE_API_URL?.trim();
+    const ensureApiSuffix = (u: string) => {
+      const cleaned = u.replace(/\/$/, '');
+      return cleaned.endsWith('/api') ? cleaned : `${cleaned}/api`;
+    };
+    const baseURL = rawBase
+      ? ensureApiSuffix(rawBase)
+    : ((import.meta as any).env?.MODE === 'development'
+          ? 'http://localhost:5000/api'
+          : 'https://focus-object-detection-in-video-cmky.onrender.com/api');
 
     this.api = axios.create({
       baseURL,
-      timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '10000'),
+  timeout: parseInt(((import.meta as any).env?.VITE_API_TIMEOUT || '10000'), 10),
       headers: { 'Content-Type': 'application/json' },
     });
 
@@ -204,13 +209,13 @@ class ApiService {
   async downloadPDFReport(sessionId: string) {
     const response = await this.api.get(`/reports/${sessionId}/pdf`, { responseType: 'blob' });
     const base = this.getUsernameSlug('user');
-    this.downloadBlob(response.data, `${base}_proctor_report.pdf`);
+    this.downloadBlob(response.data, `${base}.pdf`);
   }
 
   async downloadCSVReport(sessionId: string) {
     const response = await this.api.get(`/reports/${sessionId}/csv`, { responseType: 'blob' });
     const base = this.getUsernameSlug('user');
-    this.downloadBlob(response.data, `${base}_proctor_report.csv`);
+    this.downloadBlob(response.data, `${base}.csv`);
   }
 
   async getReportStats() {
@@ -242,7 +247,7 @@ class ApiService {
   // --- Health check ---
   async healthCheck() {
     try {
-      const healthUrl = this.api.defaults.baseURL!.replace('/api', '/health');
+      const healthUrl = this.api.defaults.baseURL!.replace(/\/api\/?$/, '/health');
       const response = await axios.get<ApiResponse<{ status: string; timestamp: string; uptime: number }>>(healthUrl);
       return response.data.data!;
     } catch (error: any) {
