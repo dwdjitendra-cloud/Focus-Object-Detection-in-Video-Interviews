@@ -7,6 +7,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  worker: {
+    // Ensure workers are built as ES modules to support import.meta.url
+    format: 'es',
+  },
   server: {
     headers: {
       'Cross-Origin-Embedder-Policy': 'require-corp',

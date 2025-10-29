@@ -387,6 +387,11 @@ const useAdvancedDetection = (
   const eventQueueRef = useRef<Array<Omit<DetectionEvent, '_id' | 'candidateId' | 'sessionId'>>>([]);
   const lastAudioLevelRef = useRef<number>(0); // for smoothing (EMA)
   const audioInitializedRef = useRef<boolean>(false);
+  // Worker-based inference (optional via env flag)
+  const USE_WORKER = (import.meta as any).env?.VITE_USE_WORKER === 'true';
+  const workerRef = useRef<Worker | null>(null);
+  const workerReadyRef = useRef<boolean>(false);
+  const workerBusyRef = useRef<boolean>(false);
 
   // Improved initializeAudio with resume, reuse, and logs
   const initializeAudio = useCallback(async () => {
@@ -410,7 +415,7 @@ const useAdvancedDetection = (
 
       // Create analyser only once
       if (!analyserRef.current) {
-        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current = audioContextRef.current!.createAnalyser();
         // Config for time-domain RMS analysis
         analyserRef.current.fftSize = 2048;
         analyserRef.current.smoothingTimeConstant = 0.25;
@@ -430,13 +435,13 @@ const useAdvancedDetection = (
         } catch (e) { /* ignore */ }
         microphoneRef.current = undefined;
       }
-      microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream);
+  microphoneRef.current = audioContextRef.current!.createMediaStreamSource(stream);
       microphoneRef.current.connect(analyserRef.current);
 
       // Try to resume immediately; browsers often start suspended
-      if (audioContextRef.current.state === 'suspended') {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
         try {
-          await audioContextRef.current.resume();
+          await audioContextRef.current!.resume();
           console.log('AudioContext resumed during initializeAudio');
         } catch (err) {
           console.warn('AudioContext resume failed during initializeAudio:', err);
@@ -466,22 +471,112 @@ const useAdvancedDetection = (
     }
   }, [initializeAudio]);
 
-  // Load AI models (via shared loader) & initialize audio
+  // Load AI models (via shared loader) OR init worker; & initialize audio
   useEffect(() => {
     let cancelled = false;
 
     const loadModels = async () => {
       try {
-        console.log('Loading AI models (shared cache)...');
-        const { faceModel, objectModel, landmarkModel } = await getModels();
+        if (USE_WORKER) {
+          // Initialize worker
+          const worker = new Worker(new URL('../workers/detectionWorker.ts', import.meta.url), { type: 'module' });
+          workerRef.current = worker;
+          workerReadyRef.current = false;
+          worker.onmessage = (e: MessageEvent) => {
+            const { type, payload, error } = e.data || {};
+            if (type === 'ready') {
+              workerReadyRef.current = true;
+              setDetectionState(prev => ({ ...prev, isModelLoaded: true }));
+            } else if (type === 'result') {
+              // Result from worker; audio handled on main thread separately
+              const currentTime = Date.now();
+              const { isFaceDetected, faceCount, eyeAspectRatio, isDrowsy, headPose, isLookingAway, detectedObjects, confidence } = payload || {};
+              setDetectionState(prev => {
+                const newState = {
+                  ...prev,
+                  isFaceDetected: !!isFaceDetected,
+                  faceCount: faceCount ?? 0,
+                  lastFaceTime: isFaceDetected ? currentTime : prev.lastFaceTime,
+                  eyeAspectRatio: eyeAspectRatio ?? 0,
+                  isDrowsy: !!isDrowsy,
+                  headPose: headPose || { yaw: 0, pitch: 0, roll: 0 },
+                  isLookingAway: !!isLookingAway,
+                  detectedObjects: detectedObjects || [],
+                  confidence: confidence || 0,
+                } as AdvancedDetectionState;
 
-        if (cancelled) return;
+                // Focus lost logic
+                if (newState.isLookingAway && !prev.isLookingAway) {
+                  newState.focusLostStart = currentTime;
+                } else if (!newState.isLookingAway && prev.isLookingAway && prev.focusLostStart) {
+                  const duration = currentTime - (prev.focusLostStart || currentTime);
+                  if (duration > finalConfig.FOCUS_THRESHOLD) {
+                    queueEvent({
+                      type: 'focus_lost',
+                      timestamp: new Date(),
+                      duration,
+                      description: `Focus lost for ${Math.round(duration / 1000)}s (head pose deviation)`,
+                      severity: duration > finalConfig.FOCUS_THRESHOLD * 2 ? 'high' : 'medium',
+                    });
+                  }
+                  delete newState.focusLostStart;
+                }
 
-        setModels({ faceModel, objectModel, landmarkModel });
-        setDetectionState(prev => ({ ...prev, isModelLoaded: true }));
-        // initialize audio (attempt). if user gesture needed, ensureAudioActive() can be called from component.
-        await initializeAudio();
-        console.log('Models loaded successfully');
+                // Drowsiness
+                if (newState.isDrowsy && !prev.isDrowsy) {
+                  queueEvent({
+                    type: 'drowsiness',
+                    timestamp: new Date(),
+                    description: 'Candidate appears drowsy',
+                    severity: 'high',
+                  });
+                }
+
+                // Multiple faces
+                if ((newState.faceCount || 0) > 1 && (prev.faceCount || 0) <= 1) {
+                  queueEvent({
+                    type: 'multiple_faces',
+                    timestamp: new Date(),
+                    description: `${newState.faceCount} faces detected`,
+                    severity: 'high',
+                  });
+                }
+
+                // Object events (new only)
+                const prevSet = new Set(prev.detectedObjects);
+                (newState.detectedObjects || []).forEach((obj: string) => {
+                  if (!prevSet.has(obj)) {
+                    queueEvent({
+                      type: obj as any,
+                      timestamp: new Date(),
+                      description: `Detected object: ${obj}`,
+                      severity: 'high',
+                    });
+                  }
+                });
+
+                return newState;
+              });
+              // allow next frame
+              workerBusyRef.current = false;
+            } else if (type === 'error') {
+              console.error('Worker error:', error);
+              workerBusyRef.current = false;
+            }
+          };
+          worker.postMessage({ type: 'init' });
+          await initializeAudio();
+        } else {
+          console.log('Loading AI models (shared cache)...');
+          const { faceModel, objectModel, landmarkModel } = await getModels();
+
+          if (cancelled) return;
+
+          setModels({ faceModel, objectModel, landmarkModel });
+          setDetectionState(prev => ({ ...prev, isModelLoaded: true }));
+          await initializeAudio();
+          console.log('Models loaded successfully');
+        }
       } catch (error) {
         console.error('Failed to load AI models:', error);
       }
@@ -568,6 +663,39 @@ const useAdvancedDetection = (
 
   // Detection loop (uses functional state updates to avoid stale closures)
   useEffect(() => {
+    // Worker-based path
+    if (USE_WORKER) {
+      if (!isActive || !videoRef.current || !workerRef.current || !workerReadyRef.current) return;
+
+      const sendFrame = async () => {
+        const video = videoRef.current!;
+        if (!video || video.paused || video.ended || video.readyState < 2) return;
+        if (workerBusyRef.current) return;
+        workerBusyRef.current = true;
+        try {
+          const bitmap = await createImageBitmap(video);
+          workerRef.current!.postMessage({ type: 'frame', bitmap }, [bitmap as any]);
+        } catch (e) {
+          workerBusyRef.current = false;
+          console.error('Failed to capture frame for worker:', e);
+        }
+      };
+
+      intervalRef.current = window.setInterval(() => {
+        // Update audio metrics on the main thread
+        const audioLevel = analyzeAudio();
+        const backgroundVoiceDetected = audioLevel > finalConfig.AUDIO_THRESHOLD;
+        setDetectionState(prev => ({ ...prev, audioLevel, backgroundVoiceDetected } as any));
+        // Send frame for vision inference
+        sendFrame();
+      }, finalConfig.DETECTION_INTERVAL);
+
+      return () => {
+        if (intervalRef.current) window.clearInterval(intervalRef.current);
+      };
+    }
+
+    // Main-thread path
     if (!isActive || !videoRef.current || !models.faceModel || !models.objectModel || !models.landmarkModel) return;
 
     const detect = async () => {
@@ -737,6 +865,15 @@ const useAdvancedDetection = (
           console.warn('AudioContext close error:', err);
         });
       }
+
+      // terminate worker
+      try {
+        if (workerRef.current) {
+          workerRef.current.postMessage({ type: 'stop' });
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
+      } catch {}
 
       // process any remaining events
       processEventQueue();

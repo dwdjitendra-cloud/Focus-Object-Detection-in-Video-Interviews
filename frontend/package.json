@@ -16,6 +16,7 @@
     "@tensorflow-models/blazeface": "^0.1.0",
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow-models/face-landmarks-detection": "^1.0.6",
+  "@tensorflow/tfjs-backend-wasm": "4.18.0",
     "@tensorflow/tfjs": "^4.18.0",
     "@tensorflow/tfjs-converter": "^4.18.0",
     "@tensorflow/tfjs-core": "^4.18.0",
