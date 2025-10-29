@@ -1,6 +1,6 @@
 # Focus & Object Detection in Video Interviews
 
-This project is a practical video proctoring system for interviews. It uses client-side AI (TensorFlow.js) to detect focus loss, multiple people, suspicious objects, drowsiness, and optional background audio, then records timestamped events and produces PDF/CSV reports.
+This project is a practical video proctoring system for interviews. It uses client-side AI (TensorFlow.js) to detect focus loss, multiple people, suspicious objects, drowsiness, and  background audio, then records timestamped events and produces PDF/CSV reports.
 
 The codebase is split into a React + TypeScript frontend and an Express + MongoDB backend.
 
