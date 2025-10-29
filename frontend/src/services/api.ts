@@ -203,14 +203,14 @@ class ApiService {
 
   async downloadPDFReport(sessionId: string) {
     const response = await this.api.get(`/reports/${sessionId}/pdf`, { responseType: 'blob' });
-    const base = this.getUsernameSlug('proctor_report');
-    this.downloadBlob(response.data, `${base}.pdf`);
+    const base = this.getUsernameSlug('user');
+    this.downloadBlob(response.data, `${base}_proctor_report.pdf`);
   }
 
   async downloadCSVReport(sessionId: string) {
     const response = await this.api.get(`/reports/${sessionId}/csv`, { responseType: 'blob' });
-    const base = this.getUsernameSlug('proctor_report');
-    this.downloadBlob(response.data, `${base}.csv`);
+    const base = this.getUsernameSlug('user');
+    this.downloadBlob(response.data, `${base}_proctor_report.csv`);
   }
 
   async getReportStats() {
