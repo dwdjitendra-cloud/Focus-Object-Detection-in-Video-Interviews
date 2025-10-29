@@ -171,8 +171,9 @@ exports.updateSession = async (req, res) => {
     if (req.body.status === 'completed' && session.status !== 'completed') {
       const events = await DetectionEvent.find({ sessionId: req.params.id });
       
+      // Include 'drowsiness' in focus violations for consistent integrity score calculation
       const focusViolations = events.filter(e => 
-        ['focus_lost', 'no_face'].includes(e.type)
+        ['focus_lost', 'no_face', 'drowsiness'].includes(e.type)
       ).length;
       
       const objectViolations = events.filter(e => 
@@ -328,8 +329,9 @@ exports.endSession = async (req, res) => {
     // Calculate final statistics
     const events = await DetectionEvent.find({ sessionId: req.params.id });
     
+    // Include 'drowsiness' in focus violations for consistent integrity score calculation
     const focusViolations = events.filter(e => 
-      ['focus_lost', 'no_face'].includes(e.type)
+      ['focus_lost', 'no_face', 'drowsiness'].includes(e.type)
     ).length;
     
     const objectViolations = events.filter(e => 

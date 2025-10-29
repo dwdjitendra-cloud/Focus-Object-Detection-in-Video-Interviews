@@ -710,13 +710,13 @@ export const VideoMonitor: React.FC<VideoMonitorProps> = ({
           )}
 
           {/* Head Pose Information */}
-          {'headPose' in detectionState && (
+          {'headPose' in detectionState && detectionState.headPose && (
             <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
               <div className="font-medium text-indigo-900">Head Pose Analysis</div>
               <div className="text-sm text-indigo-700 space-y-1">
-                <div>Yaw: {detectionState.headPose.yaw.toFixed(2)}</div>
-                <div>Pitch: {detectionState.headPose.pitch.toFixed(2)}</div>
-                <div>Roll: {detectionState.headPose.roll.toFixed(2)}</div>
+                <div>Yaw: {detectionState.headPose.yaw?.toFixed(2) ?? 'N/A'}</div>
+                <div>Pitch: {detectionState.headPose.pitch?.toFixed(2) ?? 'N/A'}</div>
+                <div>Roll: {detectionState.headPose.roll?.toFixed(2) ?? 'N/A'}</div>
               </div>
             </div>
           )}
