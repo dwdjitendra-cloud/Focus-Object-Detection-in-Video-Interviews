@@ -25,18 +25,50 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS setup (allow frontend + local dev)
-app.use(
-  cors({
-    origin: [
-      "https://focus-object-detection-in-video-int-gray.vercel.app", // frontend prod
-      "http://localhost:5173", // local dev (vite default)
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
+// CORS setup (allow frontend + local dev + env-configurable origins)
+const defaultOrigins = new Set([
+  "http://localhost:5173",
+  "https://focus-object-detection-in-video-int-gray.vercel.app",
+]);
+
+if (process.env.CORS_ORIGIN) {
+  process.env.CORS_ORIGIN.split(",")
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .forEach((origin) => defaultOrigins.add(origin));
+}
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) {
+      // Allow non-browser clients (like curl/postman)
+      return callback(null, true);
+    }
+
+    if (defaultOrigins.has(origin)) {
+      return callback(null, true);
+    }
+
+    try {
+      const hostname = new URL(origin).hostname;
+      // Allow Vercel preview deployments automatically
+      if (hostname.endsWith("vercel.app")) {
+        return callback(null, true);
+      }
+    } catch (err) {
+      return callback(err);
+    }
+
+    return callback(new Error(`CORS origin not allowed: ${origin}`));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // Body parser
 app.use(express.json());

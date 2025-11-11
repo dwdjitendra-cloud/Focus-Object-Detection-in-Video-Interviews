@@ -165,13 +165,13 @@ self.addEventListener('message', async (evt: MessageEvent<WorkerInit | WorkerFra
       let confidence = 0;
 
       const runInference = async () => {
-        // Create tensor from ImageData derived from the canvas and cast to float32 (WASM op compatibility)
+        // Create ImageData from canvas; use float32 tensor only for landmarks, and pass ImageData to coco-ssd for int32 input
         const img = ctx!.getImageData(0, 0, canvas!.width, canvas!.height);
-        const input = tf.tidy(() => tf.browser.fromPixels(img).toFloat());
+        const lmInput = tf.tidy(() => tf.browser.fromPixels(img).toFloat());
 
         try {
-          // Landmarks
-          const faces = await landmarkModel!.estimateFaces(input as any);
+          // Landmarks (prefer float32 for WASM op compatibility)
+          const faces = await landmarkModel!.estimateFaces(lmInput as any);
           faceCount = faces.length;
           isFaceDetected = faceCount > 0;
           if (faces.length > 0) {
@@ -182,8 +182,8 @@ self.addEventListener('message', async (evt: MessageEvent<WorkerInit | WorkerFra
             isLookingAway = analyzeFocus(headPose);
           }
 
-          // Object Detection
-          const objects = await objectModel!.detect(input as any);
+          // Object Detection (pass ImageData so model builds int32 tensor internally)
+          const objects = await objectModel!.detect(img as any);
           const filtered = objects.filter(o => (o.score || 0) >= CONF_THRESH);
           const mapped: string[] = [];
           filtered.forEach(o => {
@@ -197,7 +197,7 @@ self.addEventListener('message', async (evt: MessageEvent<WorkerInit | WorkerFra
           detectedObjects = Array.from(new Set(mapped));
           confidence = filtered.length > 0 ? Math.max(...filtered.map(o => o.score || 0)) : 0;
         } finally {
-          input.dispose();
+          lmInput.dispose();
         }
       };
 
