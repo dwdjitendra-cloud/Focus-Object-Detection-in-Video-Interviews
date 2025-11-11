@@ -331,14 +331,14 @@ import type { FaceModel, ObjectModel, LandmarkModel } from '../services/modelLoa
 
 // Default config
 const DEFAULT_CONFIG: DetectionConfig = {
-  FOCUS_THRESHOLD: parseInt(import.meta.env.VITE_FOCUS_THRESHOLD) || 5000,
-  ABSENCE_THRESHOLD: parseInt(import.meta.env.VITE_ABSENCE_THRESHOLD) || 10000,
-  DETECTION_INTERVAL: parseInt(import.meta.env.VITE_DETECTION_INTERVAL) || 300,
-  CONFIDENCE_THRESHOLD: parseFloat(import.meta.env.VITE_CONFIDENCE_THRESHOLD) || 0.6,
+  FOCUS_THRESHOLD: parseInt(((import.meta as any).env?.VITE_FOCUS_THRESHOLD || '5000'), 10),
+  ABSENCE_THRESHOLD: parseInt(((import.meta as any).env?.VITE_ABSENCE_THRESHOLD || '10000'), 10),
+  DETECTION_INTERVAL: parseInt(((import.meta as any).env?.VITE_DETECTION_INTERVAL || '300'), 10),
+  CONFIDENCE_THRESHOLD: parseFloat(((import.meta as any).env?.VITE_CONFIDENCE_THRESHOLD || '0.5')),
   EYE_CLOSURE_THRESHOLD: 0.25,
   DROWSINESS_DURATION: 3000,
   // Lowered default audio threshold for real-world mic levels (quiet rooms)
-  AUDIO_THRESHOLD: parseFloat(import.meta.env.VITE_AUDIO_THRESHOLD) || 0.005,
+  AUDIO_THRESHOLD: parseFloat(((import.meta as any).env?.VITE_AUDIO_THRESHOLD || '0.005')),
 };
 
 interface AdvancedDetectionState extends DetectionState {
@@ -729,17 +729,16 @@ const useAdvancedDetection = (
         const backgroundVoiceDetected = audioLevel > finalConfig.AUDIO_THRESHOLD;
 
         const objects = await models.objectModel!.detect(video);
-        const filtered = objects.filter(o => o.score > finalConfig.CONFIDENCE_THRESHOLD);
-        // Map COCO classes to our allowed event types
+        const filtered = objects.filter(o => (o.score || 0) >= finalConfig.CONFIDENCE_THRESHOLD);
+        // Extended mapping for more device-like objects (smartwatch, remote, clock, tablet)
         const mapped: string[] = [];
         filtered.forEach(o => {
           const cls = (o.class || '').toLowerCase();
-          if (cls.includes('phone') || cls.includes('cell phone') || cls.includes('mobile')) mapped.push('phone');
+          if (cls.includes('phone') || cls.includes('cell phone') || cls.includes('mobile') || cls.includes('smartphone')) mapped.push('phone');
           else if (cls.includes('book')) mapped.push('book');
-          else if (cls.includes('laptop') || cls.includes('keyboard') || cls.includes('mouse')) mapped.push('device');
+          else if (cls.includes('laptop') || cls.includes('keyboard') || cls.includes('mouse') || cls.includes('remote') || cls.includes('clock') || cls.includes('tablet') || cls.includes('tv')) mapped.push('device');
           else if (cls.includes('paper') || cls.includes('notebook') || cls.includes('note')) mapped.push('notes');
-          else if (cls.includes('person') && o.score > 0.6) mapped.push('unauthorized_person');
-          // else ignore other classes
+          else if (cls.includes('person') && (o.score || 0) >= Math.max(finalConfig.CONFIDENCE_THRESHOLD, 0.5)) mapped.push('unauthorized_person');
         });
         const detectedObjects = Array.from(new Set(mapped));
         const confidence = filtered.length > 0 ? Math.max(...filtered.map(o => o.score)) : 0;

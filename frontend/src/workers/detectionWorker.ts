@@ -18,6 +18,17 @@ let faceLmNS: typeof import('@tensorflow-models/face-landmarks-detection');
 let objectModel: import('@tensorflow-models/coco-ssd').ObjectDetection | undefined;
 let landmarkModel: import('@tensorflow-models/face-landmarks-detection').FaceLandmarksDetector | undefined;
 
+// Configurable confidence threshold via env (default 0.5)
+const CONF_THRESH: number = (() => {
+  try {
+    const v = (import.meta as any)?.env?.VITE_CONFIDENCE_THRESHOLD;
+    const n = v ? parseFloat(v) : NaN;
+    return Number.isFinite(n) ? n : 0.5;
+  } catch {
+    return 0.5;
+  }
+})();
+
 let canvas: OffscreenCanvas | undefined;
 let ctx: OffscreenCanvasRenderingContext2D | null | undefined;
 
@@ -113,6 +124,8 @@ async function ensureInit() {
   ]);
 }
 
+let backendFallbackTried = false;
+
 self.addEventListener('message', async (evt: MessageEvent<WorkerInit | WorkerFrame | WorkerStop>) => {
   const msg = evt.data as any;
   try {
@@ -151,10 +164,10 @@ self.addEventListener('message', async (evt: MessageEvent<WorkerInit | WorkerFra
       let detectedObjects: string[] = [];
       let confidence = 0;
 
-      {
-        // Create tensor from ImageData derived from the canvas
+      const runInference = async () => {
+        // Create tensor from ImageData derived from the canvas and cast to float32 (WASM op compatibility)
         const img = ctx!.getImageData(0, 0, canvas!.width, canvas!.height);
-        const input = tf.browser.fromPixels(img);
+        const input = tf.tidy(() => tf.browser.fromPixels(img).toFloat());
 
         try {
           // Landmarks
@@ -171,20 +184,47 @@ self.addEventListener('message', async (evt: MessageEvent<WorkerInit | WorkerFra
 
           // Object Detection
           const objects = await objectModel!.detect(input as any);
-          const filtered = objects.filter(o => (o.score || 0) > 0.6);
+          const filtered = objects.filter(o => (o.score || 0) >= CONF_THRESH);
           const mapped: string[] = [];
           filtered.forEach(o => {
             const cls = (o.class || '').toLowerCase();
-            if (cls.includes('phone') || cls.includes('cell phone') || cls.includes('mobile')) mapped.push('phone');
+            if (cls.includes('phone') || cls.includes('cell phone') || cls.includes('mobile') || cls.includes('smartphone')) mapped.push('phone');
             else if (cls.includes('book')) mapped.push('book');
-            else if (cls.includes('laptop') || cls.includes('keyboard') || cls.includes('mouse')) mapped.push('device');
+            else if (cls.includes('laptop') || cls.includes('keyboard') || cls.includes('mouse') || cls.includes('tv') || cls.includes('remote') || cls.includes('clock') || cls.includes('tablet')) mapped.push('device');
             else if (cls.includes('paper') || cls.includes('notebook') || cls.includes('note')) mapped.push('notes');
-            else if (cls.includes('person') && (o.score || 0) > 0.6) mapped.push('unauthorized_person');
+            else if (cls.includes('person') && (o.score || 0) >= Math.max(CONF_THRESH, 0.5)) mapped.push('unauthorized_person');
           });
           detectedObjects = Array.from(new Set(mapped));
           confidence = filtered.length > 0 ? Math.max(...filtered.map(o => o.score || 0)) : 0;
         } finally {
           input.dispose();
+        }
+      };
+
+      try {
+        await runInference();
+      } catch (e: any) {
+        const msg = String(e?.message || e);
+        if (!backendFallbackTried && /BatchMatMul|not yet supported|dtype/i.test(msg)) {
+          // Try switching backend dynamically
+          try {
+            if (tf.getBackend() === 'wasm') {
+              await import('@tensorflow/tfjs-backend-webgl');
+              await tf.setBackend('webgl');
+            } else if (tf.getBackend() === 'webgl') {
+              await import('@tensorflow/tfjs-backend-cpu');
+              await tf.setBackend('cpu');
+            }
+            await tf.ready();
+            backendFallbackTried = true;
+            await runInference();
+          } catch (fallbackErr) {
+            (self as any).postMessage({ type: 'error', error: (fallbackErr as any)?.message || String(fallbackErr) });
+            return;
+          }
+        } else {
+          (self as any).postMessage({ type: 'error', error: msg });
+          return;
         }
       }
 
