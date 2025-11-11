@@ -728,8 +728,9 @@ const useAdvancedDetection = (
         const audioLevel = analyzeAudio();
         const backgroundVoiceDetected = audioLevel > finalConfig.AUDIO_THRESHOLD;
 
-        const objects = await models.objectModel!.detect(video);
-        const filtered = objects.filter(o => (o.score || 0) >= finalConfig.CONFIDENCE_THRESHOLD);
+  const objects = await models.objectModel!.detect(video);
+  // Lower raw threshold before mapping then remap classes, but keep final filtering semantic
+  const filtered = objects.filter(o => (o.score || 0) >= (finalConfig.CONFIDENCE_THRESHOLD * 0.85));
         // Extended mapping for more device-like objects (smartwatch, remote, clock, tablet)
         const mapped: string[] = [];
         filtered.forEach(o => {
@@ -741,6 +742,10 @@ const useAdvancedDetection = (
           else if (cls.includes('person') && (o.score || 0) >= Math.max(finalConfig.CONFIDENCE_THRESHOLD, 0.5)) mapped.push('unauthorized_person');
         });
         const detectedObjects = Array.from(new Set(mapped));
+        // If no mapped objects but we have high-confidence raw detections of known categories, log debug
+        if (filtered.length > 0 && detectedObjects.length === 0) {
+          console.debug('[detection] Raw objects detected but none mapped:', filtered.map(f => ({ class: f.class, score: f.score })));
+        }
         const confidence = filtered.length > 0 ? Math.max(...filtered.map(o => o.score)) : 0;
 
         // Functional state update to avoid stale closures

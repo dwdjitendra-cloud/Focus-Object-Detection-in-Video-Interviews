@@ -68,7 +68,8 @@ export async function getModels() {
 
       const [faceModel, objectModel, landmarkModel] = await Promise.all([
         blazefaceNS.load(),
-        cocoSsdNS.load(),
+        // Use the heavier but more accurate base
+        cocoSsdNS.load({ base: 'mobilenet_v2' }),
         faceLmNS.createDetector(
           faceLmNS.SupportedModels.MediaPipeFaceMesh,
           { runtime: 'tfjs', refineLandmarks: true, maxFaces: 2 }

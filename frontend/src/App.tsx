@@ -193,6 +193,7 @@ function App() {
   };
 
   const stats = getSessionStats();
+  const debugMode = typeof window !== 'undefined' && /[?&]debug=1/.test(window.location.search);
 
   // Render
   if (appState === 'setup') {
@@ -279,7 +280,13 @@ function App() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 xl:grid-cols-4 gap-6">
-        <div className="xl:col-span-3">
+        <div className="xl:col-span-3 relative">
+          {debugMode && (
+            <div className="absolute top-2 left-2 z-50 bg-black/60 text-xs text-green-200 p-2 rounded max-w-xs space-y-1 font-mono">
+              <div>Model: {/** VideoMonitor loads model */} </div>
+              <div>Session: {currentSession?._id || 'n/a'}</div>
+            </div>
+          )}
           <VideoMonitor
             candidateId={currentCandidate?._id || ''}
             sessionId={currentSession?._id || ''}

@@ -23,9 +23,9 @@ const CONF_THRESH: number = (() => {
   try {
     const v = (import.meta as any)?.env?.VITE_CONFIDENCE_THRESHOLD;
     const n = v ? parseFloat(v) : NaN;
-    return Number.isFinite(n) ? n : 0.5;
+    return Number.isFinite(n) ? n : 0.4;
   } catch {
-    return 0.5;
+    return 0.4;
   }
 })();
 
@@ -119,7 +119,7 @@ async function ensureInit() {
 
   // Load models
   [objectModel, landmarkModel] = await Promise.all([
-    cocoSsdNS.load(),
+    cocoSsdNS.load({ base: 'mobilenet_v2' }),
     faceLmNS.createDetector(faceLmNS.SupportedModels.MediaPipeFaceMesh, { runtime: 'tfjs', refineLandmarks: true, maxFaces: 2 })
   ]);
 }
