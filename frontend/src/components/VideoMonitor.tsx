@@ -397,8 +397,10 @@ export const VideoMonitor: React.FC<VideoMonitorProps> = ({
   }, [isRecording, ensureAudioActive, onToggleRecording]);
 
   useEffect(() => {
-    if (webcamRef.current?.video) {
-      videoRef.current = webcamRef.current.video;
+    const vid = webcamRef.current?.video as HTMLVideoElement | undefined;
+    if (vid) {
+      // Assign via cast to satisfy React's RefObject typing differences
+      (videoRef as unknown as { current: HTMLVideoElement | null }).current = vid;
     }
   }, [webcamRef.current?.video]);
 
@@ -409,62 +411,94 @@ export const VideoMonitor: React.FC<VideoMonitorProps> = ({
 
   const toggleFullscreen = useCallback(() => setIsFullscreen(!isFullscreen), [isFullscreen]);
 
-  // Automatically trigger events for detected issues
+  // Automatically trigger events for detected issues with smarter throttling & absence threshold
   useEffect(() => {
     if (!isRecording) return;
 
+    const now = Date.now();
+    const ABSENCE_THRESHOLD = parseInt((import.meta as any).env?.VITE_ABSENCE_THRESHOLD || '10000', 10); // ms
+
+    // Emit no_face only if face missing beyond threshold or every 8s to reduce spam
     if (!detectionState.isFaceDetected) {
-      handleDetectionEvent({
-        type: 'no_face',
-        description: 'No face detected',
-        severity: 'high',
-        timestamp: new Date().toISOString()
-      });
+      const lastFaceTime = detectionState.lastFaceTime || now;
+      const absenceDuration = now - lastFaceTime;
+      const lastNoFace = lastEventRef.current['no_face'] || 0;
+      if (absenceDuration > ABSENCE_THRESHOLD || (now - lastNoFace) > 8000) {
+        handleDetectionEvent({
+          type: 'no_face',
+          description: absenceDuration > ABSENCE_THRESHOLD
+            ? `No face detected for ${Math.round(absenceDuration/1000)}s`
+            : 'No face detected',
+          severity: absenceDuration > ABSENCE_THRESHOLD ? 'high' : 'medium',
+          timestamp: new Date()
+        });
+      }
     }
 
+    // Focus lost (looking away) - debounce 5s between events
     if (detectionState.isLookingAway) {
-      handleDetectionEvent({
-        type: 'focus_lost',
-        description: 'Candidate looking away',
-        severity: 'medium',
-        timestamp: new Date().toISOString()
-      });
+      const lastFocusLost = lastEventRef.current['focus_lost'] || 0;
+      if (now - lastFocusLost > 5000) {
+        handleDetectionEvent({
+          type: 'focus_lost',
+          description: 'Candidate looking away',
+          severity: 'medium',
+          timestamp: new Date()
+        });
+      }
     }
 
+    // Drowsiness: emit only once per 15s window
     if ('isDrowsy' in detectionState && detectionState.isDrowsy) {
-      handleDetectionEvent({
-        type: 'drowsiness',
-        description: 'Candidate appears drowsy',
-        severity: 'high',
-        timestamp: new Date().toISOString()
-      });
+      const lastDrowsy = lastEventRef.current['drowsiness'] || 0;
+      if (now - lastDrowsy > 15000) {
+        handleDetectionEvent({
+          type: 'drowsiness',
+          description: 'Candidate appears drowsy',
+          severity: 'high',
+          timestamp: new Date()
+        });
+      }
     }
 
+    // Background voice: emit every 10s max
     if ('backgroundVoiceDetected' in detectionState && detectionState.backgroundVoiceDetected) {
-      handleDetectionEvent({
-        type: 'background_voice',
-        description: 'Background voice detected',
-        severity: 'medium',
-        timestamp: new Date().toISOString()
-      });
+      const lastVoice = lastEventRef.current['background_voice'] || 0;
+      if (now - lastVoice > 10000) {
+        handleDetectionEvent({
+          type: 'background_voice',
+          description: 'Background voice detected',
+          severity: 'medium',
+          timestamp: new Date()
+        });
+      }
     }
 
+    // Objects: each new object event throttled by 6s
     detectionState.detectedObjects.forEach(obj => {
-      handleDetectionEvent({
-        type: obj,
-        description: `Detected object: ${obj}`,
-        severity: 'high',
-        timestamp: new Date().toISOString()
-      });
+      const lastObj = lastEventRef.current[obj] || 0;
+      if (now - lastObj > 6000) {
+        // Cast object class to allowed event type union if it matches predefined mapping
+        handleDetectionEvent({
+          type: obj as any,
+          description: `Detected object: ${obj}`,
+          severity: 'high',
+          timestamp: new Date()
+        });
+      }
     });
 
+    // Multiple faces: throttle 10s
     if (detectionState.faceCount > 1) {
-      handleDetectionEvent({
-        type: 'multiple_faces',
-        description: `${detectionState.faceCount} faces detected`,
-        severity: 'high',
-        timestamp: new Date().toISOString()
-      });
+      const lastMulti = lastEventRef.current['multiple_faces'] || 0;
+      if (now - lastMulti > 10000) {
+        handleDetectionEvent({
+          type: 'multiple_faces',
+          description: `${detectionState.faceCount} faces detected`,
+          severity: 'high',
+          timestamp: new Date()
+        });
+      }
     }
 
   }, [detectionState, isRecording, handleDetectionEvent]);

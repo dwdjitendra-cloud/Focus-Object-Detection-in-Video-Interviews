@@ -62,14 +62,44 @@ async function ensureInit() {
   if (tf && objectModel && landmarkModel) return;
   // Dynamic imports
   tf = await import('@tensorflow/tfjs');
-  // wasm backend for worker stability
-  await import('@tensorflow/tfjs-backend-wasm');
+  // Prefer WASM in worker for stability/perf; configure asset path for .wasm files
   try {
+    const wasmNS = await import('@tensorflow/tfjs-backend-wasm');
+    // Allow env override, else default to jsDelivr CDN matching our package.json version (4.18.0)
+    const wasmPath = (import.meta as any)?.env?.VITE_TFJS_WASM_PATH ||
+      'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.18.0/dist/';
+    // setWasmPaths is available on the wasm backend namespace
+    try {
+      (wasmNS as any).setWasmPaths?.(wasmPath);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[worker] setWasmPaths not available or failed:', e);
+    }
     await tf.setBackend('wasm');
   } catch (e) {
-    // fallback to cpu if wasm fails
     // eslint-disable-next-line no-console
-    console.warn('[worker] Failed to set wasm backend, falling back to default.', e);
+    console.warn('[worker] WASM backend init failed; will try webgl/cpu fallback.', e);
+  }
+
+  if (tf.getBackend() !== 'wasm') {
+    // Try webgl next
+    try {
+      await import('@tensorflow/tfjs-backend-webgl');
+      await tf.setBackend('webgl');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[worker] WebGL backend init failed; falling back to CPU.', e);
+    }
+  }
+
+  if (tf.getBackend() !== 'wasm' && tf.getBackend() !== 'webgl') {
+    try {
+      await import('@tensorflow/tfjs-backend-cpu');
+      await tf.setBackend('cpu');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[worker] CPU backend init failed as well.', e);
+    }
   }
   await tf.ready();
 

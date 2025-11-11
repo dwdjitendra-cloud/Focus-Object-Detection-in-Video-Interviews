@@ -19,11 +19,34 @@ async function getTF(): Promise<TFModule> {
   if (!tfPromise) {
     tfPromise = (async () => {
       const tf = await import('@tensorflow/tfjs');
+      // Attempt preferred backends with fallbacks and configure WASM asset path (for non-worker path)
       try {
         await tf.setBackend('webgl');
       } catch (e) {
-        console.warn('[modelLoader] webgl backend not available; using default.', e);
+        console.warn('[modelLoader] webgl backend not available; trying wasm.', e);
       }
+
+      if (tf.getBackend() !== 'webgl') {
+        try {
+          const wasmNS = await import('@tensorflow/tfjs-backend-wasm');
+          const wasmPath = (import.meta as any)?.env?.VITE_TFJS_WASM_PATH ||
+            'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.18.0/dist/';
+          try { (wasmNS as any).setWasmPaths?.(wasmPath); } catch {}
+          await tf.setBackend('wasm');
+        } catch (e) {
+          console.warn('[modelLoader] wasm backend init failed; will fall back to cpu.', e);
+        }
+      }
+
+      if (tf.getBackend() !== 'webgl' && tf.getBackend() !== 'wasm') {
+        try {
+          await import('@tensorflow/tfjs-backend-cpu');
+          await tf.setBackend('cpu');
+        } catch (e) {
+          console.warn('[modelLoader] cpu backend init failed as well.', e);
+        }
+      }
+
       await tf.ready();
       return tf;
     })();

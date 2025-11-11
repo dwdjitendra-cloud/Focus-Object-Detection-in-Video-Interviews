@@ -24,11 +24,12 @@ class ApiService {
       ? ensureApiSuffix(rawBase)
     : ((import.meta as any).env?.MODE === 'development'
           ? 'http://localhost:5000/api'
-          : 'https://focus-object-detection-in-video-cmky.onrender.com/api');
+      : 'https://focus-object-detection-in-video-yub9.onrender.com/api');
 
     this.api = axios.create({
       baseURL,
-  timeout: parseInt(((import.meta as any).env?.VITE_API_TIMEOUT || '10000'), 10),
+      // More tolerant default timeout; can be overridden via VITE_API_TIMEOUT
+      timeout: parseInt(((import.meta as any).env?.VITE_API_TIMEOUT || '30000'), 10),
       headers: { 'Content-Type': 'application/json' },
     });
 

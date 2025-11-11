@@ -195,24 +195,33 @@ exports.generatePDFReport = async (req, res) => {
      .text(`Behavior Violations: ${behaviorEvents.length}`, 50, 315)
      .text(`Integrity Score: ${Math.round(integrityScore)}/100`, 50, 330);
 
-    // Event Timeline
+    // Event Timeline (robust pagination and wrapping)
     if (events.length > 0) {
+      // Start the timeline heading at a fixed position and then rely on doc.y for flow
       doc.fontSize(16).text('Event Timeline', 50, 360);
-      let yPosition = 385;
-      
-      events.forEach((event, index) => {
-        if (yPosition > 740) {
+      doc.moveDown(0.5);
+
+      const writeEvent = (idx, ev) => {
+        const time = new Date(ev.timestamp).toLocaleTimeString();
+        const header = `${idx + 1}. ${time} - ${ev.type} (${ev.severity})`;
+        const description = `   ${ev.description || ''}`;
+
+        // If we're close to the page bottom, add a new page and re-add section title
+        if (doc.y > 740) {
           doc.addPage();
-          yPosition = 50;
-          doc.fontSize(16).text('Event Timeline (contd.)', 50, yPosition);
-          yPosition += 25;
+          doc.fontSize(16).text('Event Timeline (contd.)', 50, 50);
+          doc.moveDown(0.5);
         }
-        const time = new Date(event.timestamp).toLocaleTimeString();
-        doc.fontSize(10)
-           .text(`${index + 1}. ${time} - ${event.type} (${event.severity})`, 50, yPosition)
-           .text(`   ${event.description}`, 50, yPosition + 12);
-        yPosition += 30;
-      });
+
+        // Header line
+        doc.fontSize(10).text(header, 50, doc.y, { width: 500 });
+        // Description wraps automatically; use the current flow position
+        doc.fontSize(10).text(description, 50, doc.y, { width: 500 });
+        // Add some spacing after each event
+        doc.moveDown(0.7);
+      };
+
+      events.forEach((ev, idx) => writeEvent(idx, ev));
     }
 
     // Finalize PDF

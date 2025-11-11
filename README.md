@@ -63,6 +63,9 @@ VITE_API_URL=http://localhost:5000
 VITE_API_TIMEOUT=30000
 VITE_USE_WORKER=true
 
+# Optional: serve TFJS WASM assets from a known path (helps first-run reliability)
+VITE_TFJS_WASM_PATH=https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-wasm@4.18.0/dist/
+
 # Optional flags
 VITE_ENABLE_AUDIO_DETECTION=false
 VITE_ENABLE_ADVANCED_ANALYTICS=true
@@ -78,6 +81,7 @@ VITE_CONFIDENCE_THRESHOLD=0.5
 Notes:
 - Set `VITE_API_URL` to the backend origin without the `/api` suffix. The app will append `/api` automatically.
 - `VITE_USE_WORKER=true` offloads TensorFlow.js vision inference to a Web Worker using the WASM backend (more stable on some devices). Audio processing runs on the main thread.
+ - If you observe slow or unreliable first launch, set `VITE_TFJS_WASM_PATH` so the WASM backend can fetch its `.wasm` files reliably (CDN default shown). The app will automatically fall back to WebGL or CPU if WASM is not available.
 
 Start the dev server:
 
@@ -95,6 +99,7 @@ Vite will print the local URL (often http://localhost:5173).
 - Multiple-person detection to ensure only the candidate is present
 - Optional background voice detection (off by default)
 - Event logging with timestamps and severity
+- Intelligent throttling to avoid duplicate spam (e.g., `no_face` only after absence threshold; audio and object events debounced)
 - Integrity score calculated from violations
 - Reports: PDF and CSV with session summary and full timeline
 - UI convenience: shows the newest 5 events by default with a “View all” toggle
@@ -148,9 +153,11 @@ Backend: deploy the Node server with your platform of choice and configure envir
 
 ## Troubleshooting
 
-- Models load slowly or the UI hangs
+- Models load slowly or the UI hangs (or starts on second try)
   - Keep `VITE_USE_WORKER=true` so vision runs in a Web Worker with the WASM backend.
-  - Ensure your browser allows camera and microphone access.
+  - Set `VITE_TFJS_WASM_PATH` to a CDN URL so the `.wasm` assets are fetched reliably on first run.
+  - The app automatically falls back between WASM → WebGL → CPU backends as needed.
+  - Ensure your browser allows camera and microphone access and reload the page after granting permissions.
 
 - API requests fail
   - Verify the backend is running on http://localhost:5000.
@@ -158,6 +165,11 @@ Backend: deploy the Node server with your platform of choice and configure envir
 
 - Events rejected with 400
   - Events are only posted for active sessions. Make sure the session hasn’t ended before logging.
+  - Client filters out invalid event types and throttles duplicates for cleaner timelines.
+
+- PDF report doesn’t show all activities
+  - Fixed: The PDF timeline now paginates and wraps text correctly, ensuring all events are included across pages in chronological order.
+  - If your report is very long, expect multiple pages with “Event Timeline (contd.)” section headers.
 
 ## License
 
